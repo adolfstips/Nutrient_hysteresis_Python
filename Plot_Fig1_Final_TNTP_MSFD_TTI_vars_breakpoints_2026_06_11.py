@@ -13,6 +13,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.stats import norm
+from scipy.special import log_ndtr
 from scipy.optimize import brentq
 
 # --- 1. GLOBAL SETTINGS ---
@@ -27,20 +28,24 @@ def r_scale(df_or_arr):
     """Replicates R's scale() with sample standard deviation (ddof=1)."""
     return (df_or_arr - np.mean(df_or_arr, axis=0)) / np.std(df_or_arr, axis=0, ddof=1)
 
-def _bai_cdf(x):
-    """Exact CDF of the Bai (1997) two-sided Brownian motion argmax distribution."""
+def _pargmaxV(x, phi1=1.0, phi2=1.0, xi=1.0):
+    """Exact CDF of R's strucchange::pargmaxV (Bai 1997 heterogeneous two-sided Brownian motion)."""
     if x == 0:
         return 0.5
     if x < 0:
-        return 1.0 - _bai_cdf(-x)
+        return 1.0 - _pargmaxV(-x, phi2, phi1, 1.0 / xi)
+    phi = xi * (phi2 / phi1)
     s = np.sqrt(x)
-    return 1.0 + s * norm.pdf(0.5 * s) - (2.5 + 0.5 * x) * norm.cdf(-0.5 * s) + 1.5 * np.exp(x) * norm.cdf(-1.5 * s)
+    term1 = np.sqrt(x / (2.0 * np.pi)) * np.exp(-x / 8.0)
+    log_term2 = np.log((phi + 0.5) / phi) + (phi * (phi + 1.0) * x / 2.0) + log_ndtr(-(phi + 0.5) * s)
+    term2 = np.exp(log_term2)
+    term3 = ((2.0 * phi + 0.5) / phi + 0.5 * x) * norm.cdf(-0.5 * s)
+    return 1.0 + term1 + term2 - term3
 
 def get_bp_ci_mapped(ts_matrix, years_vector, h=0.15, max_breaks=5, level=0.95):
     """
-    Replicates R's strucchange::breakpoints(ts_data ~ 1) and confint(bp, level = 0.95).
-    Note: R's breakpoints.formula(ts_matrix ~ 1) evaluates the primary response column
-    via dynamic programming to minimize RSS and selects optimal m via BIC.
+    Exact replica of R's strucchange::breakpoints(ts_data ~ 1) and confint(bp, level = 0.95)
+    with default heterogeneous segment error variances (het.err = TRUE).
     """
     arr = np.asarray(ts_matrix, dtype=float)
     y = arr[:, 0] if arr.ndim > 1 else arr
@@ -85,25 +90,29 @@ def get_bp_ci_mapped(ts_matrix, years_vector, h=0.15, max_breaks=5, level=0.95):
     best_m = min(bics, key=bics.get)
     opt_breaks = breaks_dict[best_m]  # 1-based indices
 
-    # Calculate 95% confidence intervals (Bai 1997)
-    alpha_tail = 1.0 - (1.0 - level) / 2.0
-    q_crit = brentq(lambda x: _bai_cdf(x) - alpha_tail, 0.0, 50.0)
-
+    # Calculate 95% confidence intervals (Bai 1997 with het.err = TRUE)
+    a2 = 1.0 - (1.0 - level) / 2.0
     bounds = [0] + opt_breaks + [n]
     means = [np.mean(y[bounds[i]:bounds[i + 1]]) for i in range(best_m + 1)]
-    sigma2 = cost[best_m, n] / (n - (best_m + 1))
+    omegas = [
+        np.sum((y[bounds[i]:bounds[i + 1]] - means[i]) ** 2) / len(y[bounds[i]:bounds[i + 1]])
+        for i in range(best_m + 1)
+    ]
 
     rows = []
     for i, b_1based in enumerate(opt_breaks):
         delta = means[i + 1] - means[i]
-        half_w = int(np.ceil(q_crit * sigma2 / (delta ** 2)))
-        b_idx = b_1based - 1
-        low_idx = max(0, b_idx - half_w)
-        high_idx = min(n - 1, b_idx + half_w)
+        scale1 = omegas[i] / (delta ** 2)
+        scale2 = omegas[i + 1] / (delta ** 2)
+        q_pos = brentq(lambda x: _pargmaxV(x, omegas[i], omegas[i + 1], 1.0) - a2, 0.0, 1000.0)
+        q_neg = brentq(lambda x: _pargmaxV(x, omegas[i + 1], omegas[i], 1.0) - a2, 0.0, 1000.0)
+
+        low_idx = max(0, b_1based - int(np.ceil(q_pos * scale2)) - 1)
+        up_idx = min(n - 1, b_1based + int(np.ceil(q_neg * scale1)) - 1)
         rows.append({
             "Lower": int(years_vector[low_idx]),
-            "Break": int(years_vector[b_idx]),
-            "Upper": int(years_vector[high_idx])
+            "Break": int(years_vector[b_1based - 1]),
+            "Upper": int(years_vector[up_idx])
         })
     return pd.DataFrame(rows)
 
@@ -174,7 +183,6 @@ def main():
         ax_b.axvline(row["Break"], color="black", linestyle="--", linewidth=1.1, zorder=2)
     ax_b.axhline(0, color="black", linestyle=":", alpha=0.6, linewidth=1.0, zorder=2)
 
-    # Sort indicators alphabetically to match ggplot2 default factor ordering: CHLA, DIN, DIP, DO2_Mt, Secchi
     ind_order = sorted([v.replace("_ALL", "") for v in msfd_vars])
     for i, var in enumerate(ind_order):
         ax_b.plot(msfd_scaled["Year"], msfd_scaled[var], label=var, color=OKABE_ITO[i], linewidth=1.4, alpha=0.85, zorder=3)
@@ -194,7 +202,7 @@ def main():
         ax_c.axvspan(row["Lower"], row["Upper"], color="#B3B3B3", alpha=0.4, zorder=1)
         ax_c.axvline(row["Break"], color="black", linestyle="--", linewidth=1.1, zorder=2)
 
-    metric_order = sorted(coupled_names)  # GES, LAG1, TN_load, TP_load, TTI
+    metric_order = sorted(coupled_names)
     for i, m in enumerate(metric_order):
         ls = "-" if m in ["TN_load", "TP_load"] else "--"
         lbl_type = "Driver (Nutrients)" if m in ["TN_load", "TP_load"] else "Response (Eco)"
