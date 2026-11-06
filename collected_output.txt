@@ -1,0 +1,101 @@
+========================================================================
+BALTIC SEA NUTRIENT HYSTERESIS - BATCH EXECUTION LOG
+Timestamp: 2026-11-06 11:40:38
+========================================================================
+
+[1/12] Running: Plot_Fig1_Final_TNTP_MSFD_TTI_vars_breakpoints_2026_06_11.py ...
+    --- Figure 1: Structural Breakpoints & 95% CIs ---
+    Panel A (Nutrient Loads):
+      Lower  Break  Upper
+      1962   1963   1964
+      1973   1974   1975
+      1988   1989   1990
+      1999   2000   2001
+      2009   2011   2013
+    Panel B (MSFD Indicators):
+      Lower  Break  Upper
+      1967   1970   1973
+      1986   1987   1988
+    Panel C (Coupled System):
+      Lower  Break  Upper
+      1972   1974   1976
+      1986   1988   1990
+      2008   2012   2016
+    Analysis complete. Figure 1 successfully saved.
+    --> [OK] Completed in 2.21 s
+
+[2/12] Running: Plot_Fig2_Final_CCF_MSFD_vars_TP_load_2026_06_11.py ...
+    --- Figure 2: Dominant Causal Lags (TP Load vs Deep Indicators) ---
+      CHLA    : Lag = 14 yrs (r = -0.726)
+      DIN     : Lag = 14 yrs (r = +0.865)
+      DIP     : Lag = 14 yrs (r = -0.723)
+      DO2_Mt  : Lag = 19 yrs (r = -0.590)
+      Secchi  : Lag =  2 yrs (r = +0.448)
+    Analysis complete. Figure 2 successfully saved.
+    --> [OK] Completed in 1.20 s
+
+[3/12] Running: Plot_Fig3_Final_TTI_mean_3curves_Baltic_2026_06_11.py ...
+    Analysis complete. Figure 3 successfully saved.
+    --> [OK] Completed in 1.49 s
+
+[4/12] Running: Plot_Fig4_Final_Hysteresis_deep_vars_TP_load_2026_06_11.py ...
+    Analysis complete. Figure 4 successfully saved.
+    --> [OK] Completed in 1.43 s
+
+[5/12] Running: Plot_Fig5_Final_SI_IFR_network_causal_analysis_Baltic_ecosystem_2026_06_11.py ...
+    Deep SI: {'TN_load': 0.24, 'TP_load': 0.37, 'DIP': 0.33, 'DIN': 0.31, 'CHLA': 0.36, 'DO2_Mt': 0.16, 'Secchi': -0.27, 'TTI': 0.28}
+    Shallow SI: {'TN_load': 0.2, 'TP_load': 0.46, 'DIP': 0.39, 'DIN': 0.32, 'CHLA': 0.25, 'DO2_Mt': -0.03, 'Secchi': 0.19, 'TTI': 0.09}
+    Analysis complete. Figure 5 successfully saved.
+    --> [OK] Completed in 2.02 s
+
+[6/12] Running: Plot_SM_Fig1_CCF_MSFD_vars_TN_load_2026_06_11.py ...
+    --- SM Figure 1: Dominant Causal Lags (TN Load vs Deep Indicators) ---
+      CHLA    : Lag = 14 yrs (r = -0.683)
+      DIN     : Lag = 16 yrs (r = +0.719)
+      DIP     : Lag = 14 yrs (r = -0.677)
+      DO2_Mt  : Lag = 19 yrs (r = -0.533)
+      Secchi  : Lag = 15 yrs (r = +0.420)
+    Analysis complete. SM Figure 1 successfully saved.
+    --> [OK] Completed in 1.20 s
+
+[7/12] Running: Plot_SM_Fig2_Final_Hysteresis_shallow_vars_TP_load_2026_06_11.py ...
+    Analysis complete. Shallow Hysteresis figure successfully saved.
+    --> [OK] Completed in 1.44 s
+
+[8/12] Running: Plot_SM_Fig3_BP_TTI_LAG_nutrients_narrative_2026_06_11.py ...
+    --- Unified System Breakpoints (5 Vars) ---
+    [1974, 1988, 2012]
+    Baltic narrative Analysis complete
+    --> [OK] Completed in 1.36 s
+
+[9/12] Running: Plot_SM_Fig4_PPR_CHLA_annual_data_2026_06_11.py ...
+    --- SM Figure 4: PPR vs Chl-a Correlation ---
+    r = 0.70 [CI: 0.55-0.80], p < 0.001
+    Analysis complete. Figure PPR-CHLa successfully saved.
+    --> [OK] Completed in 1.62 s
+
+[10/12] Running: Plot_SM_Fig5_Baltic_DIP_deep_150m_Obs_Model.py ...
+    --- Deep Station (150m) Statistical Skill ---
+            Station        Variable  Pearson_r  RMSE  Mean_Bias
+    EGB 26DA (150m) Phosphate (DIP)      0.666  0.63     -0.485
+    Analysis complete. Figure SM5 successfully saved.
+    --> [OK] Completed in 1.00 s
+
+[11/12] Running: Plot_SM_Fig6_Baltic_DIP_deep_50m_ICES.py ...
+    Analysis complete. Figure SM6 successfully saved.
+    --> [OK] Completed in 1.27 s
+
+[12/12] Running: Plot_SM_Fig7_Baltic_DIP_DIN_ODIN_Model.py ...
+    --- Model vs. Observation Statistical Skill ---
+              Region  Nutrient  Pearson_r  RMSE  Mean_Bias
+    Arkona (Shallow)   Nitrate     -0.306 2.468      1.218
+    Arkona (Shallow) Phosphate      0.645 0.101     -0.069
+          EGB (Deep)   Nitrate     -0.220 1.526      0.095
+          EGB (Deep) Phosphate      0.438 0.142     -0.119
+    Analysis complete. Composite figure SM7 successfully saved.
+    --> [OK] Completed in 1.38 s
+
+========================================================================
+Batch run finished: 12/12 scripts succeeded in 17.69 s.
+Full console output saved to: collected_output.txt
+========================================================================
