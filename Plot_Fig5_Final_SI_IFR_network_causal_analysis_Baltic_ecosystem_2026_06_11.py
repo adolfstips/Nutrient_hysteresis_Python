@@ -2,7 +2,7 @@
 """
 Baltic Ecosystem Deep and Shallow Variables
 Global System Impact (SI) and Multidimensional Information Flow Rate (IFR) Analysis
-Figure 5 for hysteresis article
+Figure 5 for hysteresis article (Hierarchical Eutrophication Cascade Layout)
 """
 
 import numpy as np
@@ -13,21 +13,66 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 from matplotlib.patches import FancyArrowPatch
 from matplotlib.lines import Line2D
-import networkx as nx
 
-OKABE_ITO_NET = {
+# Okabe-Ito colorblind-friendly palette (separate node fill vs edge stroke for white-bg contrast)
+OKABE_ITO_FILL = {
     "TN_load": "#56B4E9",  # Light Blue
     "TP_load": "#E69F00",  # Orange
     "DIP":     "#009E73",  # Bluish Green
-    "DIN":     "#F0E442",  # Yellow
+    "DIN":     "#F0E442",  # Yellow (outlined in dark grey on nodes)
     "CHLA":    "#D55E00",  # Vermillion
     "DO2_Mt":  "#0072B2",  # Dark Blue
     "Secchi":  "#CC79A7",  # Reddish Purple
     "TTI":     "#999999"   # Grey
 }
 
+OKABE_ITO_EDGE = {
+    "TN_load": "#56B4E9",
+    "TP_load": "#E69F00",
+    "DIP":     "#009E73",
+    "DIN":     "#C8A200",  # Deeper gold so DIN arrows are clearly legible on white
+    "CHLA":    "#D55E00",
+    "DO2_Mt":  "#0072B2",
+    "Secchi":  "#CC79A7",
+    "TTI":     "#7F7F7F"
+}
+
+# Fixed 4-tier mechanistic eutrophication cascade coordinates in [0, 1] x [0, 1]
+TIER_COORDS = {
+    "TN_load": (0.32, 1.00),  # Tier 1: External Forcing (N pathway)
+    "TP_load": (0.68, 1.00),  # Tier 1: External Forcing (P pathway)
+    "DIN":     (0.04, 0.68),  # Tier 2: Ambient Nutrients (N pathway)
+    "DIP":     (0.96, 0.68),  # Tier 2: Ambient Nutrients (P pathway)
+    "CHLA":    (0.00, 0.32),  # Tier 3: Pelagic Response (Biomass)
+    "Secchi":  (1.00, 0.32),  # Tier 3: Pelagic Response (Clarity)
+    "DO2_Mt":  (0.28, 0.00),  # Tier 4: Benthic Hypoxia & Trophic State
+    "TTI":     (0.72, 0.00),  # Tier 4: Benthic Hypoxia & Trophic State
+}
+
+# Outward label offsets: (lx, ly, ha, va)
+NODE_LABELS = {
+    "TN_load": ( 0.28,  1.095, "center", "bottom"),
+    "TP_load": ( 0.72,  1.095, "center", "bottom"),
+    "DIN":     (-0.08,  0.680, "right",  "center"),
+    "DIP":     ( 1.08,  0.680, "left",   "center"),
+    "CHLA":    (-0.09,  0.320, "right",  "center"),
+    "Secchi":  ( 1.09,  0.320, "left",   "center"),
+    "DO2_Mt":  ( 0.28, -0.095, "center", "top"),
+    "TTI":     ( 0.72, -0.095, "center", "top"),
+}
+
+TIER_GUIDES = [
+    (1.00, "External Forcing"),
+    (0.68, "Ambient Nutrients"),
+    (0.32, "Pelagic Response"),
+    (0.00, "Hypoxia & TTI"),
+]
+
+
 def r_scale(df_or_arr):
+    """Replicates R's scale() using sample standard deviation (ddof=1)."""
     return (df_or_arr - np.mean(df_or_arr, axis=0)) / np.std(df_or_arr, axis=0, ddof=1)
+
 
 def global_impact(xxx, np_lag=1):
     """Exact translation of Liang's Global System Impact (GI / SI) function."""
@@ -57,6 +102,7 @@ def global_impact(xxx, np_lag=1):
 
     T1 = np.trace(invC1[1:M, 1:M] @ AC[1:M, 1:M]) - np.trace(A[1:M, 1:M])
     return float(T1)
+
 
 def causal_error_multidim_95(xxx, np_lag=1):
     """Exact translation of Liang (2021) multidimensional Information Flow Rate (T21) and 95% CI."""
@@ -110,6 +156,7 @@ def causal_error_multidim_95(xxx, np_lag=1):
 
     return float(T21), float(err95)
 
+
 def compute_region_metrics(plot_data, var_names):
     x = np.asarray(plot_data, dtype=float)
     M = x.shape[1]
@@ -132,102 +179,110 @@ def compute_region_metrics(plot_data, var_names):
     infoflow = np.round(TT, 2)
     return GG1, gg_ad, infoflow
 
-def plot_gi_panel(ax, var_names, gg_ad, region_name, s_date, e_date, panel_label):
-    ymin = np.floor(np.min(gg_ad) * 10.0 - 0.4) / 10.0
-    ymax = np.ceil(np.max(gg_ad) * 10.0 + 0.35) / 10.0
 
-    # Muted Blue - White - Muted Red diverging colormap
+def plot_gi_panel(ax, var_names, gg_ad, region_name, s_date, e_date, panel_label):
+    # Shared y-axis and colour limits across Deep & Shallow for direct visual comparison
+    ymin, ymax = -0.35, 0.52
+
     cmap = LinearSegmentedColormap.from_list("si_div", ["#4E6A9E", "#FFFFFF", "#9E3B33"])
-    norm = TwoSlopeNorm(vmin=min(ymin, -0.05), vcenter=0.0, vmax=max(ymax, 0.05))
+    norm = TwoSlopeNorm(vmin=ymin, vcenter=0.0, vmax=ymax)
     colors = [cmap(norm(val)) for val in gg_ad]
 
     x_pos = np.arange(len(var_names))
-    ax.bar(x_pos, gg_ad, width=0.92, color=colors, edgecolor="black", linewidth=0.5, zorder=2)
+    ax.bar(x_pos, gg_ad, width=0.85, color=colors, edgecolor="black", linewidth=0.5, zorder=2)
 
     for idx, val in enumerate(gg_ad):
-        y_txt = val + 0.03 * (1 if val >= 0 else -1)
+        y_txt = val + 0.032 * (1 if val >= 0 else -1)
         ax.text(idx, y_txt, f"{val:.2g}" if val in [0.2] else f"{val:.2f}",
                 ha="center", va="center", fontweight="bold", fontsize=9.5, zorder=4)
 
     ax.axhline(0, color="black", linewidth=1.0, zorder=3)
-    ax.axhline(0.1, color="#7F7F7F", linestyle="--", linewidth=1.0, zorder=3)
-    ax.axhline(-0.1, color="#7F7F7F", linestyle="--", linewidth=1.0, zorder=3)
+    ax.axhline(0.1, color="#7F7F7F", linestyle="--", linewidth=0.9, zorder=3)
+    ax.axhline(-0.1, color="#7F7F7F", linestyle="--", linewidth=0.9, zorder=3)
 
+    yticks = np.round(np.arange(-0.3, 0.55, 0.1), 1)
     ax.set_ylim(ymin, ymax)
+    ax.set_yticks(yticks)
+    ax.set_yticklabels([f"{y:.1f}" for y in yticks], fontsize=10)
+
     ax.set_xticks(x_pos)
     ax.set_xticklabels(var_names, rotation=45, ha="right", fontweight="bold", fontsize=10)
     ax.set_ylabel("System Impact [Nat/year]", fontsize=12, fontweight="bold")
-    ax.set_title(f"System Impact - {region_name}", fontsize=15, fontweight="bold", pad=16)
-    ax.text(0.0, 1.02, f"Period: {s_date} - {e_date}", transform=ax.transAxes, fontsize=10, color="#333333")
-    ax.text(-0.12, 1.08, panel_label, transform=ax.transAxes, fontsize=20, fontweight="bold")
+    ax.set_title(f"System Impact - {region_name}", fontsize=16, fontweight="bold", pad=18)
+    ax.text(0.0, 1.02, f"Period: {s_date} - {e_date}", transform=ax.transAxes, fontsize=10.5, color="#333333")
+    ax.text(-0.16, 1.08, panel_label, transform=ax.transAxes, fontsize=22, fontweight="bold")
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+
 
 def plot_network_panel(ax, var_names, GG1, infoflow, region_name, panel_label):
     adj = infoflow.copy()
     adj[np.isnan(adj)] = 0.0
     adj[np.abs(adj) < 0.1] = 0.0
 
-    G = nx.DiGraph()
-    for idx, name in enumerate(var_names):
-        G.add_node(name, gi_abs=abs(GG1[idx]), gi_sign="Negative" if GG1[idx] < 0 else "Positive")
+    # Enforce exogenous boundary condition: external loads cannot receive causal inflows
+    exog_indices = [i for i, name in enumerate(var_names) if name in ("TN_load", "TP_load")]
+    adj[:, exog_indices] = 0.0
 
+    # Subtle horizontal functional tier guide lines & left-margin labels
+    for ty, tlabel in TIER_GUIDES:
+        ax.plot([-0.06, 1.06], [ty, ty], color="#E5E5E5", linestyle=":", linewidth=1.0, zorder=0)
+        ax.text(-0.24, ty, tlabel, fontsize=10, color="#666666", fontstyle="italic",
+                ha="right", va="center", zorder=1)
+
+    # Fixed global SI node-size scaling [0, 0.50] across Deep and Shallow
+    gi_abs = np.clip(np.abs(GG1), 0.0, 0.50)
+    node_sizes = 240 + (gi_abs / 0.50) * 2150
+
+    for idx, n in enumerate(var_names):
+        px, py = TIER_COORDS[n]
+        marker = "s" if GG1[idx] < 0 else "o"
+        ax.scatter(px, py, s=node_sizes[idx], facecolor=OKABE_ITO_FILL[n],
+                   marker=marker, alpha=0.90, edgecolors="#333333", linewidths=0.9, zorder=3)
+        lx, ly, ha, va = NODE_LABELS[n]
+        ax.text(lx, ly, n, fontsize=11.5, fontweight="bold",
+                ha=ha, va=va, color="black", zorder=5)
+
+    # Directed causal edges with fixed global IFR scaling [0.10, 0.65]
     M = len(var_names)
     for i in range(M):
         for j in range(M):
-            if adj[i, j] != 0:
-                G.add_edge(var_names[i], var_names[j], weight=adj[i, j],
-                           flow_strength=abs(adj[i, j]),
-                           flow_sign="Positive" if adj[i, j] > 0 else "Negative")
+            w = adj[i, j]
+            if w != 0.0:
+                u, v = var_names[i], var_names[j]
+                s_abs = abs(w)
+                norm_s = np.clip((s_abs - 0.10) / (0.65 - 0.10), 0.0, 1.0)
+                lw = 1.1 + norm_s * 4.5
+                alpha = 0.52 + norm_s * 0.43
+                ls = "solid" if w > 0 else (0, (4, 2))
 
-    pos = nx.kamada_kawai_layout(G, weight=None)
+                # rad=-0.15 bends clockwise (right-hand rule), matching ggplot2 curvature=+0.15
+                patch = FancyArrowPatch(
+                    posA=TIER_COORDS[u], posB=TIER_COORDS[v],
+                    connectionstyle="arc3,rad=-0.15",
+                    arrowstyle="-|>,head_length=8.5,head_width=5.2",
+                    color=OKABE_ITO_EDGE[u], linewidth=lw, linestyle=ls, alpha=alpha,
+                    shrinkA=18, shrinkB=21, zorder=2
+                )
+                ax.add_patch(patch)
 
-    # Scale node sizes and edge widths
-    gi_vals = np.array([G.nodes[n]["gi_abs"] for n in var_names])
-    g_min, g_max = gi_vals.min(), max(gi_vals.max(), gi_vals.min() + 1e-6)
-    node_sizes = 350 + (gi_vals - g_min) / (g_max - g_min) * 1850
-
-    for idx, n in enumerate(var_names):
-        marker = "s" if G.nodes[n]["gi_sign"] == "Negative" else "o"
-        ax.scatter(pos[n][0], pos[n][1], s=node_sizes[idx], color=OKABE_ITO_NET[n],
-                   marker=marker, alpha=0.85, edgecolors="none", zorder=3)
-        ax.text(pos[n][0], pos[n][1] - 0.09, n, fontsize=11, fontweight="bold", ha="center", va="top", zorder=5)
-
-    edges = list(G.edges(data=True))
-    if edges:
-        strengths = np.array([d["flow_strength"] for _, _, d in edges])
-        s_min, s_max = strengths.min(), max(strengths.max(), strengths.min() + 1e-6)
-
-        for u, v, d in edges:
-            norm_s = (d["flow_strength"] - s_min) / (s_max - s_min) if s_max > s_min else 0.5
-            lw = 1.0 + norm_s * 4.2
-            alpha = 0.40 + norm_s * 0.55
-            ls = "solid" if d["flow_sign"] == "Positive" else (0, (4, 2))
-            edge_col = OKABE_ITO_NET[u]
-
-            patch = FancyArrowPatch(
-                posA=pos[u], posB=pos[v],
-                connectionstyle="arc3,rad=0.18",
-                arrowstyle="-|>,head_length=8,head_width=5",
-                color=edge_col, linewidth=lw, linestyle=ls, alpha=alpha,
-                shrinkA=18, shrinkB=18, zorder=2
-            )
-            ax.add_patch(patch)
-
-    ax.set_title(f"IFR Causality Network - {region_name}", fontsize=15, fontweight="bold", pad=16)
-    ax.text(-0.08, 1.08, panel_label, transform=ax.transAxes, fontsize=20, fontweight="bold")
+    ax.set_xlim(-0.46, 1.24)
+    ax.set_ylim(-0.16, 1.16)
+    ax.set_title(f"IFR Causality Network - {region_name}", fontsize=16, fontweight="bold", pad=18)
+    ax.text(-0.04, 1.08, panel_label, transform=ax.transAxes, fontsize=22, fontweight="bold")
     ax.axis("off")
 
-    # Add compact bottom legend
+    # Compact bottom legend matching R version
     legend_elements = [
-        Line2D([0], [0], color="#666666", lw=1.8, ls="--", label="Causal: Negative"),
-        Line2D([0], [0], color="#666666", lw=1.8, ls="-", label="Causal: Positive"),
-        Line2D([0], [0], marker="s", color="w", markerfacecolor="#666666", markersize=8, label="SI: Negative"),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="#666666", markersize=8, label="SI: Positive")
+        Line2D([0], [0], color="#555555", lw=1.8, ls="--", label="Causal: Negative"),
+        Line2D([0], [0], color="#555555", lw=1.8, ls="-", label="Causal: Positive"),
+        Line2D([0], [0], marker="s", color="w", markerfacecolor="#737373", markeredgecolor="#333333", markersize=8.5, label="SI: Negative"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#737373", markeredgecolor="#333333", markersize=8.5, label="SI: Positive"),
     ]
-    ax.legend(handles=legend_elements, loc="lower center", bbox_to_anchor=(0.5, -0.08),
-              ncol=4, frameon=False, fontsize=9.5)
+    ax.legend(handles=legend_elements, loc="lower center", bbox_to_anchor=(0.52, -0.06),
+              ncol=4, frameon=False, fontsize=10)
+
 
 def main():
     grand_df = pd.read_csv("Baltic_variables_Mt_4_Causal_Input.csv")
@@ -247,17 +302,18 @@ def main():
     print("Deep SI:", {k: float(v) for k, v in zip(clean_names, gg_ad_deep)})
     print("Shallow SI:", {k: float(v) for k, v in zip(clean_names, gg_ad_shal)})
 
-    fig, axes = plt.subplots(2, 2, figsize=(18, 14), dpi=300)
-    fig.subplots_adjust(wspace=0.22, hspace=0.32)
+    fig = plt.figure(figsize=(18, 14), dpi=300)
+    gs = fig.add_gridspec(2, 2, width_ratios=[0.38, 0.62], wspace=0.14, hspace=0.28)
 
-    plot_gi_panel(axes[0, 0], clean_names, gg_ad_deep, "Deep Baltic", s_date, e_date, "A")
-    plot_network_panel(axes[0, 1], clean_names, GG_deep, ifr_deep, "Deep Baltic", "B")
-    plot_gi_panel(axes[1, 0], clean_names, gg_ad_shal, "Shallow Baltic", s_date, e_date, "C")
-    plot_network_panel(axes[1, 1], clean_names, GG_shal, ifr_shal, "Shallow Baltic", "D")
+    plot_gi_panel(fig.add_subplot(gs[0, 0]), clean_names, gg_ad_deep, "Deep Baltic", s_date, e_date, "A")
+    plot_network_panel(fig.add_subplot(gs[0, 1]), clean_names, GG_deep, ifr_deep, "Deep Baltic", "B")
+    plot_gi_panel(fig.add_subplot(gs[1, 0]), clean_names, gg_ad_shal, "Shallow Baltic", s_date, e_date, "C")
+    plot_network_panel(fig.add_subplot(gs[1, 1]), clean_names, GG_shal, ifr_shal, "Shallow Baltic", "D")
 
     plt.savefig("Figure_5_Baltic_Causality_Combined.png", dpi=300, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print("Analysis complete. Figure 5 successfully saved.")
+
 
 if __name__ == "__main__":
     main()
